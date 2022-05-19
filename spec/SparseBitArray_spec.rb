@@ -1,4 +1,6 @@
-RSpec.describe SparseBitArray do
+require 'benchmark'
+
+RSpec.describe do
   it 'SparseBitArrayElement' do
     e = HashTable::SparseBitArrayElement.new
     e.set(23)
@@ -22,12 +24,14 @@ RSpec.describe SparseBitArray do
 
   it 'SparseBitArray Enumerator' do
     e = HashTable::SparseBitArray.new
-    e.set(129)
-    (0..128).to_a.each_index do |i|
-      e.set(i)
-    end
-    e.each do |index|
-      p "#{index}----"
+    Benchmark.bm(7) do |x|
+      x.report("each:") do
+        (0..2263).to_a.each_index do |i|
+          e.set(i)
+          e.test?(i)
+          e.reset(i)
+        end
+      end
     end
   end
 

@@ -88,7 +88,7 @@ module HashTable
     # @param  [object] key
     # @param  [object] traits
     def adds(keys, traits)
-      (keys || []).map { |key| set_as_interal(key, traits) }
+      keys.map { |key| set_as_interal(key, traits) }
     end
 
     protected
@@ -135,6 +135,8 @@ module HashTable
 
         bucket[1] = value unless value.nil?
       end
+      return index if traits.respond_to?(:lookup_key_and_value)
+
       bucket[0]
     end
 

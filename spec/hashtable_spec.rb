@@ -1,65 +1,27 @@
-class Traits
-  def hash_lookup_key(key)
-    key
-  end
+require 'benchmark'
 
-  def lookup_key_to_storage_key(key)
-    key
-  end
-
-  def storage_key_to_lookup_key(key)
-    key
-  end
-end
-
-class StringTraits
-  attr_reader :string_table, :string_index
-
-  def initialize
-    @string_table = "\0"
-    @string_index = 1
-  end
-
-  def hash_lookup_key(key)
-    result = 0
-    key.each_byte { |byte| result += byte * 13 }
-    result
-  end
-
-  def lookup_key_to_storage_key(key)
-    @string_table += "#{key}\0"
-    old_si = @string_index
-    @string_index += key.length + 1
-    old_si
-  end
-
-  def storage_key_to_lookup_key(offset)
-    @string_table[offset..-1][/[^\0]+/]
-  end
-end
-
-RSpec.describe Hashtable do
+RSpec.describe do
   it 'hash table' do
     table = HashTable::HashTable.new(2)
-    table.set(3, 7, Traits.new)
-    table.set(4, 5, Traits.new)
-    table.set(5, 6, Traits.new)
-    table.set(6, 7, Traits.new)
-    table.set(8, 9, Traits.new)
-    table.set(9, 19, Traits.new)
+    table.set(3, 7, HashTable::Traits.new)
+    table.set(4, 5, HashTable::Traits.new)
+    table.set(5, 6, HashTable::Traits.new)
+    table.set(6, 7, HashTable::Traits.new)
+    table.set(8, 9, HashTable::Traits.new)
+    table.set(9, 19, HashTable::Traits.new)
     expect(table.size).to eq(6)
-    expect(table.get(3, Traits.new)).to eq(7)
-    expect(table.get(4, Traits.new)).to eq(5)
-    expect(table.get(5, Traits.new)).to eq(6)
-    expect(table.get(6, Traits.new)).to eq(7)
-    expect(table.get(8, Traits.new)).to eq(9)
-    expect(table.get(9, Traits.new)).to eq(19)
+    expect(table.get(3, HashTable::Traits.new)).to eq(7)
+    expect(table.get(4, HashTable::Traits.new)).to eq(5)
+    expect(table.get(5, HashTable::Traits.new)).to eq(6)
+    expect(table.get(6, HashTable::Traits.new)).to eq(7)
+    expect(table.get(8, HashTable::Traits.new)).to eq(9)
+    expect(table.get(9, HashTable::Traits.new)).to eq(19)
     expect(table.capacity).to eq(16)
   end
 
   it 'hash string table' do
     table = HashTable::HashTable.new(2)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     table.set('ViewController64.h', 'ViewController64.h', traits)
     table.set('ViewController65.h', 'ViewController65.h', traits)
     table.set('ViewController66.h', 'ViewController66.h', traits)
@@ -79,7 +41,7 @@ RSpec.describe Hashtable do
 
   it 'hash string table add' do
     table = HashTable::HashTable.new
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     (0..31).each do |i|
       table.add("ViewController#{i}.h", traits)
     end
@@ -91,7 +53,7 @@ RSpec.describe Hashtable do
 
   it 'hash string table 86 expand add' do
     table = HashTable::HashTable.new(expand: true)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     (0..85).each do |i|
       table.add("ViewController#{i}.h", traits)
     end
@@ -103,7 +65,7 @@ RSpec.describe Hashtable do
 
   it 'hash string table 341 expand add' do
     table = HashTable::HashTable.new(expand: true)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     (0..340).each do |i|
       table.add("ViewController#{i}.h", traits)
     end
@@ -115,7 +77,7 @@ RSpec.describe Hashtable do
 
   it 'hash string table 1364 6expand add' do
     table = HashTable::HashTable.new(8192, expand: true)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     (0..1363).each do |i|
       table.add("ViewController#{i}.h", traits)
     end
@@ -127,10 +89,10 @@ RSpec.describe Hashtable do
 
   it 'hash string table expand adds' do
     table = HashTable::HashTable.new(expand: true)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     bucket = table.adds(%w[TestAndTestApp/ViewController.h
-                  /Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/
-                  ViewController.h], traits)
+                           /Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/
+                           ViewController.h], traits)
     p "#{table.size}---#{table.capacity}----#{table.num_entries}"
     expect(table.size).to eq(3)
     expect(table.capacity).to eq(8)
@@ -141,14 +103,28 @@ RSpec.describe Hashtable do
 
   it 'hash string table expand adds' do
     table = HashTable::HashTable.new(8192, expand: true)
-    traits = StringTraits.new
+    traits = HashTable::StringTraits.new
     buckets = (0..1363).map do |i|
-      a = ["ViewController#{i}.h", "/Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/#{i}", "ViewController#{i}.h"]
+      a = ["ViewController#{i}.h", "/Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/#{i}",
+           "ViewController#{i}.h"]
       table.adds(a, traits)
     end
     p "#{table.size}---#{table.capacity}----#{table.num_entries}"
     expect(table.size).to eq(2728)
     expect(table.capacity).to eq(8192)
     expect(table.num_entries).to eq(5461)
+  end
+  it 'hash string table expand adds' do
+    table = HashTable::HashTable.new(8192, expand: true)
+    traits = HashTable::StringTraits2.new
+    Benchmark.bm(7) do |x|
+      x.report('for:') do
+        buckets = (0..1363).map do |i|
+          table.set("ViewController#{i}.h",
+                    ["/Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/#{i}", "ViewController#{i}.h"], traits)
+        end
+        p buckets
+      end
+    end
   end
 end

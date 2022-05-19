@@ -54,7 +54,7 @@ module HashTable
     end
 
     def reset(index)
-      bits[index / BITWORD_SIZE] &= ~(1 << (index % BITWORD_SIZE))
+      @bits[index / BITWORD_SIZE] &= ~(1 << (index % BITWORD_SIZE))
     end
 
     # v = @bits[i]
@@ -274,7 +274,7 @@ module HashTable
       @current_index = if element.index > index
                          @elements[0..element_i].rindex { |e| e.index <= index } || 0
                        else
-                         @elements[element_i..-1].select { |e| e.index < index }.length + element_i
+                         @elements[element_i..].select { |e| e.index < index }.length + element_i
                        end
     end
   end
