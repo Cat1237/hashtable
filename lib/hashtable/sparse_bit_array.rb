@@ -30,11 +30,18 @@ module HashTable
       @bits[index]
     end
 
+    def ==(other)
+      return false unless index == other.index
+
+      (0...BITWORDS_PER_ELEMENT).each do |i|
+        return false unless @bits[i] == other.bits[i]
+      end || true
+    end
+
     def empty?
       (0...BITWORDS_PER_ELEMENT).each do |i|
         return false unless @bits[i].zero?
-      end
-      true
+      end || true
     end
 
     def set(index)
@@ -48,9 +55,8 @@ module HashTable
     def test_and_set?(index)
       unless test(index)
         set(Idx)
-        return true
-      end
-      false
+        true
+      end || false
     end
 
     def reset(index)
@@ -64,8 +70,13 @@ module HashTable
     # v = (v * 0x0101010101010101) & UINT_64_MAX
     # v >>= 56
     def count
-      (0...BITWORDS_PER_ELEMENT).inject(0) do |nums, i|
-        v = @bits[i].digits(2).count(1)
+      @bits.inject(0) do |nums, b|
+        v = b
+        v -= ((v >> 1) & 0x5555555555555555)
+        v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333)
+        v = (v + (v >> 4) & 0x0F0F0F0F0F0F0F0F)
+        v = (v * 0x0101010101010101) & UINT_64_MAX
+        v >>= 56
         nums + v
       end
     end
@@ -74,11 +85,12 @@ module HashTable
     def first
       (0...BITWORDS_PER_ELEMENT).each do |i|
         v = @bits[i]
-        next if v.zero?
-
-        count = v.digits(2).index(1)
-        return i * BITWORD_SIZE + count
+        unless v.zero?
+          count = v.digits(2).index(1)
+          return i * BITWORD_SIZE + count
+        end
       end
+      raise ArgumentError, 'Illegal empty element'
     end
 
     # @return [Integer] the index of the last set bit
@@ -86,11 +98,12 @@ module HashTable
       (0...BITWORDS_PER_ELEMENT).each do |i|
         index = BITWORDS_PER_ELEMENT - i - 1
         v = @bits[index]
-        next unless v != 0
-
-        count = BIT_WORD - v.bit_length
-        return index * BITWORD_SIZE + BITWORD_SIZE - count - 1
+        unless v.zero?
+          count = BIT_WORD - v.bit_length
+          return index * BITWORD_SIZE + BITWORD_SIZE - count - 1
+        end
       end
+      raise ArgumentError, 'Illegal empty element'
     end
 
     # @return [Integer] the index of the next set bit starting from the "index" bit.
@@ -153,6 +166,10 @@ module HashTable
         bits >>= 1
       end
     end
+
+    protected
+
+    attr_reader :bits
   end
 
   # SparseBitArray is an implementation of a bitmap that is sparse by only storing the elements that have non-zero bits set.
@@ -163,6 +180,7 @@ module HashTable
     # @return [Integer] Pointer to our current Element.
     # This has no visible effect on the external state of a SparseBitArray
     # It's just used to improve performance in the common case of testing/modifying bits with similar indices.
+    # attr_reader :current_index
     attr_reader :current_index
 
     def initialize
@@ -177,8 +195,7 @@ module HashTable
 
       e_index = index / ELEMENT_SIZE
       element_i = lower_bound(e_index)
-      last = elements.length
-      return false if element_i == last || elements[element_i].index != e_index
+      return false if element_i == elements.length || elements[element_i].index != e_index
 
       elements[element_i].test?(index % ELEMENT_SIZE)
     end
@@ -205,13 +222,14 @@ module HashTable
       e_index = index / ELEMENT_SIZE
       element_i = lower_bound(e_index)
       new_e = elements[element_i]
-      unless new_e.nil?
-        element_i += 1 if new_e.index < e_index
-        new_e = nil if new_e.index != e_index
+      eql = new_e.index <=> e_index unless new_e.nil?
+      if eql.nil? || eql != 0
+        element_i += 1 if eql == -1
+        new_e = SparseBitArrayElement.new(e_index)
+        @elements.insert(element_i, new_e)
       end
       @current_index = element_i
-      @elements.insert(@current_index, SparseBitArrayElement.new(e_index)) if new_e.nil?
-      @elements[@current_index].set(index % ELEMENT_SIZE)
+      new_e.set(index % ELEMENT_SIZE)
     end
 
     # @return [Void] Test, Set a bit in the bitmap
@@ -269,12 +287,14 @@ module HashTable
       @current_index -= 1 if @current_index == elements.length
       element_i = @current_index
       element = @elements[element_i]
-      return element_i if element.index == index
 
-      @current_index = if element.index > index
+      @current_index = case element.index <=> index
+                       when 0
+                         element_i
+                       when 1
                          @elements[0..element_i].rindex { |e| e.index <= index } || 0
-                       else
-                         @elements[element_i..].select { |e| e.index < index }.length + element_i
+                       when -1
+                         @elements[element_i..].count { |e| e.index < index } + element_i
                        end
     end
   end

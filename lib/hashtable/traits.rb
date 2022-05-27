@@ -1,84 +1,65 @@
-# frozen_string_literal: true
+# frozen_string_literal: false
 
 # module HashTable
 module HashTable
-  class Traits
-    def hash_lookup_key(key)
-      key
-    end
-
-    def lookup_key_to_storage_key(key)
-      key
-    end
-
-    def storage_key_to_lookup_key(key)
-      key
-    end
+  # IdentityHashTraits
+  class IdentityHashTraits
+    define_method(:hash_lookup_key) { |key| key }
+    define_method(:lookup_key_to_storage_key) { |key| key }
+    define_method(:storage_key_to_lookup_key) { |key| key }
+    define_method(:lookup_key_to_storage_value) { |_key, value| value }
   end
 
-  class StringTraits
-    attr_reader :string_table, :string_index
+  # StringIdentityHashTraits
+  class StringIdentityHashTraits < IdentityHashTraits
+    attr_reader :string_table, :buckets
 
-    def initialize
+    def initialize(&block)
+      super
       @string_table = "\0"
-      @string_index = 1
-    end
-
-    def hash_lookup_key(key)
-      result = 0
-      key.each_byte { |byte| result += byte * 13 }
-      result
-    end
-
-    def lookup_key_to_storage_key(key)
-      @string_table += "#{key}\0"
-      old_si = @string_index
-      @string_index += key.length + 1
-      old_si
-    end
-
-    def storage_key_to_lookup_key(offset)
-      @string_table[offset..][/[^\0]+/]
-    end
-  end
-
-  class StringTraits2
-    attr_reader :string_table, :buckets, :hash_h
-
-    def initialize
-      @string_table = "\0"
-      @string_index = 1
       @buckets = {}
-      @hash_h = {}
+      @indexs = {}
     end
 
     def hash_lookup_key(key)
-      return @hash_h[key] unless @hash_h[key].nil?
-
-      result = 0
-      key.each_byte { |byte| result += byte * 13 }
-      @hash_h[key] = result
-      result
+      key.downcase.bytes.inject(:+) * 13
     end
 
     def lookup_key_to_storage_key(key)
       return @buckets[key] unless @buckets[key].nil?
 
-      @string_table += "#{key}\0"
-      old_si = @string_index
-      @string_index += key.length + 1
+      old_si = @string_table.length
       @buckets[key] = old_si
+      @string_table << "#{key}\0".b
+      @indexs[old_si] = key
       old_si
     end
 
-    def lookup_key_and_value(key, value)
-      value.inject([@buckets[key]]) do |sum, v|
-        sum << lookup_key_to_storage_key(v)
-      end
+    def storage_key_to_lookup_key(offset)
+      return @indexs[offset] unless @indexs[offset].nil?
+
+      key = @string_table[offset..][/[^\0]+/]
+      @indexs[offset] = key
+      key
+    end
+  end
+
+  # StringHashTraits
+  class StringHashTraits < StringIdentityHashTraits
+    attr_reader :string_table, :buckets
+
+    def initialize(&block)
+      super
+      @block = block
     end
 
-    def storage_key_to_lookup_key(offset)
-      @string_table[offset..][/[^\0]+/]
+    def lookup_key_to_storage_value(key, values)
+      return if values.nil? || values.empty?
+
+      bs = values.map { |v| lookup_key_to_storage_key(v) }.unshift(key)
+      return bs if @block.nil?
+
+      @block.call(bs)
     end
   end
 end

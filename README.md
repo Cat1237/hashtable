@@ -52,116 +52,57 @@ end
 Store numbers：
 
 ```ruby
-class Traits
-  def hash_lookup_key(key)
-    key
-  end
-
-  def lookup_key_to_storage_key(key)
-    key
-  end
-
-  def storage_key_to_lookup_key(key)
-    key
-  end
-end
-
 table = HashTable::HashTable.new(2)
-traits = Traits.new
-table.set(3, 7, )
-table.set(4, 5, traits)
-table.set(5, 6, traits)
-table.set(6, 7, traits)
-table.set(8, 9, traits)
-table.set(9, 19, traits)
+table.set(3, 7, HashTable::IdentityHashTraits.new)
+table.set(4, 5, HashTable::IdentityHashTraits.new)
+table.set(5, 6, HashTable::IdentityHashTraits.new)
+table.set(6, 7, HashTable::IdentityHashTraits.new)
+table.set(8, 9, HashTable::IdentityHashTraits.new)
+table.set(9, 19, HashTable::IdentityHashTraits.new)
+expect(table.size).to eq(6)
+expect(table.get(3, HashTable::IdentityHashTraits.new)).to eq(7)
+expect(table.get(4, HashTable::IdentityHashTraits.new)).to eq(5)
+expect(table.get(5, HashTable::IdentityHashTraits.new)).to eq(6)
+expect(table.get(6, HashTable::IdentityHashTraits.new)).to eq(7)
+expect(table.get(8, HashTable::IdentityHashTraits.new)).to eq(9)
+expect(table.get(9, HashTable::IdentityHashTraits.new)).to eq(19)
+expect(table.capacity).to eq(16)
 ```
 
 Store strings：
 
 ```ruby
-class StringTraits
-  attr_reader :string_table, :string_index
-
-  def initialize
-    @string_table = "\0"
-    @string_index = 1
-  end
-
-  def hash_lookup_key(key)
-    result = 0
-    key.each_byte { |byte| result += byte * 13 }
-    result
-  end
-
-  def lookup_key_to_storage_key(key)
-    @string_table += "#{key}\0"
-    old_si = @string_index
-    @string_index += key.length + 1
-    old_si
-  end
-
-  def storage_key_to_lookup_key(offset)
-    @string_table[offset..-1][/[^\0]+/]
-  end
-end
-
-
 table = HashTable::HashTable.new(2)
-traits = StringTraits.new
+traits = HashTable::StringIdentityHashTraits.new
 table.set('ViewController64.h', 'ViewController64.h', traits)
 table.set('ViewController65.h', 'ViewController65.h', traits)
 table.set('ViewController66.h', 'ViewController66.h', traits)
 table.set('ViewController67.h', 'ViewController67.h', traits)
 table.set('ViewController68.h', 'ViewController68.h', traits)
 table.set('ViewController69.h', 'ViewController69.h', traits)
-# ViewController64.h
-table.get('ViewController64.h', traits)
-# \u0000ViewController64.h\u0000ViewController65.h\u0000ViewController66.h\u0000ViewController67.h\u0000ViewController68.h\u0000ViewController69.h\u0000
-p traits.string_table
+expect(table.size).to eq(6)
+expect(table.get('ViewController64.h', traits)).to eq('ViewController64.h')
+expect(table.get('ViewController65.h', traits)).to eq('ViewController65.h')
+expect(table.get('ViewController66.h', traits)).to eq('ViewController66.h')
+expect(table.get('ViewController67.h', traits)).to eq('ViewController67.h')
+expect(table.get('ViewController68.h', traits)).to eq('ViewController68.h')
+expect(table.get('ViewController69.h', traits)).to eq('ViewController69.h')
+expect(table.capacity).to eq(16)
+expect(traits.string_table).to eq("\u0000ViewController64.h\u0000ViewController65.h\u0000ViewController66.h\u0000ViewController67.h\u0000ViewController68.h\u0000ViewController69.h\u0000")
 ```
 
 Store just key string：
 
 ```ruby
-class StringTraits
-  attr_reader :string_table, :string_index
-
-  def initialize
-    @string_table = "\0"
-    @string_index = 1
-  end
-
-  def hash_lookup_key(key)
-    result = 0
-    key.each_byte { |byte| result += byte * 13 }
-    result
-  end
-
-  def lookup_key_to_storage_key(key)
-    @string_table += "#{key}\0"
-    old_si = @string_index
-    @string_index += key.length + 1
-    old_si
-  end
-
-  def storage_key_to_lookup_key(offset)
-    @string_table[offset..-1][/[^\0]+/]
-  end
-end
-
-
-table = HashTable::HashTable.new(2)
-traits = StringTraits.new
-
+table = HashTable::HashTable.new
+traits = HashTable::StringIdentityHashTraits.new
 (0..31).each do |i|
-   table.add("ViewController#{i}.h", traits)
+  table.add("ViewController#{i}.h", traits)
 end
-# 32
-p table.size
-# 64
-p table.capacity
-# 32
-p table.num_entries
+p "#{table.size}---#{table.capacity}----#{table.num_entries}"
+expect(table.size).to eq(32)
+expect(table.capacity).to eq(64)
+expect(table.num_entries).to eq(32)
 ```
 
 Store strings and expand capacity:
@@ -171,44 +112,16 @@ Store strings and expand capacity:
 - capacity is power_of_two
 
 ```ruby
-class StringTraits
-  attr_reader :string_table, :string_index
-
-  def initialize
-    @string_table = "\0"
-    @string_index = 1
-  end
-
-  def hash_lookup_key(key)
-    result = 0
-    key.each_byte { |byte| result += byte * 13 }
-    result
-  end
-
-  def lookup_key_to_storage_key(key)
-    @string_table += "#{key}\0"
-    old_si = @string_index
-    @string_index += key.length + 1
-    old_si
-  end
-
-  def storage_key_to_lookup_key(offset)
-    @string_table[offset..-1][/[^\0]+/]
-  end
-end
-
-table = HashTable::HashTable.new(8192, expand: true)
-traits = StringTraits.new
+table = HashTable::HashTable.new(1364, expand: true)
+traits = HashTable::StringHashTraits.new
 buckets = (0..1363).map do |i|
-    a = ["ViewController#{i}.h", "/Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/#{i}", "ViewController#{i}.h"]
-    table.adds(a, traits)
+table.set("ViewController#{i}.h",
+            ["/Users/ws/Desktop/llvm/TestAndTestApp/TestAndTestApp/Group/h2/#{i}", "ViewController#{i}.h"], traits)
 end
-# 2728
-p table.size
-# 8192
-p table.capacity
-# 5461
-p table.num_entries
+p "#{table.size}---#{table.capacity}----#{table.num_entries}"
+expect(table.size).to eq(1364)
+expect(table.capacity).to eq(8192)
+expect(table.num_entries).to eq(4097)
 ```
 
 ## Contributing
